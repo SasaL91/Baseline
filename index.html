@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0A1630">
+<meta name="description" content="Lettore musicale offline che riproduce i file audio salvati sul dispositivo.">
+<title>App Musica</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<style>
+/* =========================================================
+   Palette ispirata al campo delle ATP Finals.
+   I contrasti WCAG AA di queste coppie sono verificati da test-logica.js.
+   ========================================================= */
+:root {
+  --sfondo: #0A1630;      /* blu notte: sfondo */
+  --accento: #1EA7FF;     /* azzurro elettrico: pulsanti e accenti */
+  --su-accento: #0A1630;  /* icone e testi sopra i pulsanti azzurri */
+  --testo: #FFFFFF;       /* testi sullo sfondo scuro */
+  --superficie: #1B2B4F;  /* campo di ricerca, avvisi, separatori */
+  --traccia: #5B6E96;     /* parte non ancora ascoltata della barra */
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--sfondo);
+  color: var(--testo);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+h1, h2, p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:active { transform: scale(.96); }
+@media (hover: hover) { button:hover { filter: brightness(1.12); } }
+:focus-visible { outline: 3px solid var(--testo); outline-offset: 3px; }
+
+/* Icone SVG inline: prendono colore e dimensione dal testo */
+.icona { width: 1em; height: 1em; flex: none; fill: currentColor; }
+.icona.linea { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Schermate ---------- */
+.schermata {
+  min-height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Schermata iniziale */
+.iniziale { justify-content: center; align-items: center; gap: 20px; text-align: center; }
+.logo { width: 112px; height: 112px; }
+.iniziale h1 { font-size: 2.2rem; }
+.intro, .nota { max-width: 480px; }
+.scelta {
+  width: 100%;
+  max-width: 480px;
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--accento);
+  color: var(--su-accento);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.scelta .icona { font-size: 2.4rem; }
+
+/* Lettore */
+.lettore { gap: 20px; }
+.barra-alta { display: flex; align-items: center; gap: 8px; }
+.barra-alta .spazio { flex: 1; }
+.piccolo {
+  min-height: 48px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid var(--accento);
+  border-radius: 24px;
+  background: transparent;
+  font-size: 1rem;
+}
+.piccolo .icona { font-size: 1.4rem; }
+.info { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; text-align: center; }
+.posizione { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.titolo {
+  font-size: clamp(1.8rem, 7vw, 2.8rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  /* massimo 2 righe, poi puntini di sospensione */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Barra di avanzamento: alta 48px per essere facile da prendere col dito */
+.barra {
+  --p: 0%; /* percentuale ascoltata, aggiornata da JS */
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.barra::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(to right, var(--accento) var(--p), var(--traccia) var(--p));
+}
+.barra::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  margin-top: -12px;
+  border: 4px solid var(--testo);
+  border-radius: 50%;
+  background: var(--accento);
+}
+.tempi { display: flex; justify-content: space-between; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+
+/* Comandi principali: Play/Pausa almeno 120px, gli altri almeno 80px */
+.comandi { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 4vw, 32px); }
+.tondo {
+  width: clamp(80px, 22vw, 104px);
+  aspect-ratio: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accento);
+  color: var(--su-accento);
+  font-size: 2.75rem;
+}
+.tondo.principale { width: clamp(120px, 32vw, 152px); font-size: 4.25rem; }
+.principale .pausa, .principale.suona .play { display: none; }
+.principale.suona .pausa { display: block; }
+
+/* Casuale e Ripeti: stato indicato da riempimento + etichetta ATTIVO/SPENTO, non solo dal colore */
+.opzioni { display: flex; gap: 16px; }
+.toggle {
+  flex: 1;
+  min-height: 80px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 3px solid var(--accento);
+  border-radius: 20px;
+  background: transparent;
+  text-align: left;
+  font-size: 1.15rem;
+}
+.toggle .icona { font-size: 2rem; }
+.toggle .stato { display: block; font-size: 1rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.toggle[aria-pressed="true"] { background: var(--accento); color: var(--su-accento); }
+
+/* ---------- Elenco brani (a schermo intero) ---------- */
+.elenco {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--sfondo);
+}
+.elenco-testa { width: 100%; max-width: 720px; margin: 0 auto; padding: 16px; display: flex; gap: 12px; }
+.ricerca {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  padding: 0 16px;
+  border: 2px solid var(--traccia);
+  border-radius: 16px;
+  background: var(--superficie);
+  color: var(--testo);
+  font: inherit;
+  font-size: 1.25rem;
+}
+.ricerca::placeholder { color: var(--testo); opacity: .75; }
+.chiudi {
+  min-height: 64px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--accento);
+  color: var(--su-accento);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.chiudi .icona { font-size: 1.6rem; }
+.vuoto { padding: 24px 16px; text-align: center; }
+.lista {
+  flex: 1;
+  overflow-y: auto;
+  /* contenuto centrato a 720px, ma barra di scorrimento sul bordo della finestra */
+  padding: 0 max(16px, calc((100% - 688px) / 2)) 16px;
+}
+.riga {
+  width: 100%;
+  height: 64px; /* righe tutte uguali: posizione del brano corrente sempre esatta */
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--superficie);
+  background: transparent;
+  text-align: left;
+  font-size: 1.15rem;
+  content-visibility: auto; /* con migliaia di righe il browser disegna solo quelle visibili */
+}
+.riga span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) { .riga:hover { background: var(--superficie); } }
+.riga[aria-current="true"] { border-radius: 12px; background: var(--accento); color: var(--su-accento); font-weight: 700; }
+.riga[aria-current="true"]::before { /* triangolo "in riproduzione" */
+  content: "";
+  flex: none;
+  width: .8em;
+  height: .8em;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* ---------- Avviso breve ---------- */
+.avviso {
+  position: fixed;
+  left: 50%;
+  top: 16px; /* in alto copre solo i pulsanti piccoli, non Casuale/Ripeti */
+  z-index: 20;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 14px 20px;
+  border: 2px solid var(--accento);
+  border-radius: 14px;
+  background: var(--superficie);
+  text-align: center;
+  pointer-events: none;
+}
+.avviso:empty { padding: 0; border: 0; } /* resta nel DOM per gli screen reader */
+</style>
+</head>
+<body>
+
+<!-- ===== Schermata iniziale: visibile finché non ci sono brani ===== -->
+<main id="iniziale" class="schermata iniziale">
+  <img class="logo" src="icons/icon-192.png" alt="" width="112" height="112">
+  <h1>App Musica</h1>
+  <p class="intro">Scegli la musica salvata su questo dispositivo. I file restano qui: niente viene caricato online.</p>
+  <button id="btn-cartella" class="scelta" type="button" aria-label="Scegli cartella">
+    <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    Scegli cartella
+  </button>
+  <p id="nota-cartella" class="nota" hidden>Questo browser non permette di scegliere una cartella: usa «Scegli file» e seleziona tutti i brani che vuoi ascoltare.</p>
+  <button id="btn-file" class="scelta" type="button" aria-label="Scegli file">
+    <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    Scegli file
+  </button>
+</main>
+
+<!-- ===== Lettore a tutto schermo ===== -->
+<main id="lettore" class="schermata lettore" hidden>
+  <header class="barra-alta">
+    <button id="btn-carica-cartella" class="piccolo" type="button" aria-label="Cartella: scegli un'altra cartella">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Cartella
+    </button>
+    <button id="btn-carica-file" class="piccolo" type="button" aria-label="File: scegli altri file">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      File
+    </button>
+    <span class="spazio"></span>
+    <button id="btn-elenco" class="piccolo" type="button" aria-label="Elenco: apri l'elenco dei brani">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Elenco
+    </button>
+  </header>
+
+  <section class="info">
+    <p id="posizione" class="posizione"></p>
+    <h1 id="titolo" class="titolo"></h1>
+  </section>
+
+  <div class="avanzamento">
+    <input id="barra" class="barra" type="range" min="0" max="0" step="any" value="0" aria-label="Posizione nel brano">
+    <div class="tempi" aria-hidden="true"><span id="trascorso">0:00</span><span id="durata">0:00</span></div>
+  </div>
+
+  <div class="comandi">
+    <button id="btn-prec" class="tondo" type="button" aria-label="Brano precedente">
+      <svg class="icona" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+    </button>
+    <button id="btn-play" class="tondo principale" type="button" aria-label="Riproduci">
+      <svg class="icona play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <svg class="icona pausa" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+    </button>
+    <button id="btn-succ" class="tondo" type="button" aria-label="Brano successivo">
+      <svg class="icona" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>
+    </button>
+  </div>
+
+  <div class="opzioni">
+    <button id="btn-casuale" class="toggle" type="button" aria-pressed="true" aria-label="Casuale">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+      <span>Casuale<span class="stato">Attivo</span></span>
+    </button>
+    <button id="btn-ripeti" class="toggle" type="button" aria-pressed="false" aria-label="Ripeti brano">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3M11 10h1v4"/></svg>
+      <span>Ripeti<span class="stato">Spento</span></span>
+    </button>
+  </div>
+</main>
+
+<!-- ===== Elenco brani: si apre sopra il lettore ===== -->
+<div id="elenco" class="elenco" role="dialog" aria-modal="true" aria-label="Elenco brani" hidden>
+  <div class="elenco-testa">
+    <input id="ricerca" class="ricerca" type="search" placeholder="Cerca un brano" aria-label="Cerca un brano" autocomplete="off" enterkeyhint="search">
+    <button id="btn-chiudi" class="chiudi" type="button" aria-label="Chiudi l'elenco">
+      <svg class="icona linea" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      Chiudi
+    </button>
+  </div>
+  <p id="nessun-risultato" class="vuoto" hidden>Nessun brano trovato.</p>
+  <div id="lista" class="lista"></div>
+</div>
+
+<p id="avviso" class="avviso" role="status"></p>
+<input id="input-cartella" type="file" webkitdirectory multiple hidden>
+<input id="input-file" type="file" accept="audio/*" multiple hidden>
+<!-- Un unico elemento audio per tutta la sessione: serve alla riproduzione in background su Android -->
+<audio id="audio"></audio>
+
+<script id="logica">
+/* =========================================================
+   Logica di riproduzione: funzioni PURE, senza DOM né audio.
+   Lo stato è un oggetto immutabile:
+     { alfa, ordine, pos, casuale, ripeti }
+     alfa    = indici dei brani in ordine alfabetico
+     ordine  = indici dei brani nell'ordine di riproduzione attuale
+     pos     = posizione del brano corrente dentro "ordine"
+   Testate da test-logica.js (node test-logica.js).
+   ========================================================= */
+const Logica = (() => {
+  const ESTENSIONI = ['mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'webm'];
+  // MIME accettati quando il nome non ha un'estensione riconoscibile
+  const MIME_AUDIO = /^audio\/(mpeg|mp3|mp4|x-m4a|aac|ogg|opus|wav|x-wav|wave|flac|x-flac|webm)$/;
+  // Equivale a localeCompare(b, 'it', { numeric: true, sensitivity: 'base' }), ma più veloce con migliaia di nomi
+  const collatore = new Intl.Collator('it', { numeric: true, sensitivity: 'base' });
+
+  /** true se il file è un audio da riprodurre (per estensione o, in mancanza, per MIME type). */
+  function eFileAudio(nome, tipo = '') {
+    const estensione = (/\.([^.]+)$/.exec(nome) || [])[1];
+    return ESTENSIONI.includes(estensione?.toLowerCase()) || MIME_AUDIO.test(tipo);
+  }
+
+  /** Titolo del brano = nome del file senza estensione. */
+  function titoloDaNome(nome) {
+    return nome.replace(/\.[^.]+$/, '') || nome;
+  }
+
+  /** Minuscolo e senza accenti: per la ricerca nell'elenco. */
+  function normalizza(testo) {
+    return testo.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  /** 83 → "1:23", 3725 → "1:02:05". */
+  function formattaTempo(secondi) {
+    const s = Math.floor(secondi || 0);
+    const ore = Math.floor(s / 3600);
+    const min = Math.floor(s / 60) % 60;
+    const sec = String(s % 60).padStart(2, '0');
+    return ore ? `${ore}:${String(min).padStart(2, '0')}:${sec}` : `${min}:${sec}`;
+  }
+
+  /** Fisher-Yates: restituisce una COPIA mescolata. rng() restituisce un numero in [0, 1). */
+  function mescola(elementi, rng) {
+    const a = elementi.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  /** Indici dei titoli in ordine alfabetico naturale ("Brano 2" prima di "brano 10"). */
+  function ordineAlfabetico(titoli) {
+    return titoli.map((_, i) => i).sort((a, b) => collatore.compare(titoli[a], titoli[b]) || a - b);
+  }
+
+  /** Stato iniziale dopo la scelta dei brani: Casuale attivo, elenco mescolato, si parte dal primo. */
+  function creaStato(titoli, rng) {
+    const alfa = ordineAlfabetico(titoli);
+    return { alfa, ordine: mescola(alfa, rng), pos: 0, casuale: true, ripeti: false };
+  }
+
+  /** Indice (nell'elenco dei brani) del brano corrente. */
+  function branoCorrente(s) {
+    return s.ordine[s.pos];
+  }
+
+  /** Brano successivo. A fine elenco: con Casuale rimescola (senza ripetere subito
+      l'ultimo brano suonato), altrimenti ricomincia dal primo in ordine alfabetico. */
+  function successivo(s, rng) {
+    if (s.pos + 1 < s.ordine.length) return { ...s, pos: s.pos + 1 };
+    if (!s.casuale) return { ...s, pos: 0 };
+    const ultimo = branoCorrente(s);
+    const ordine = mescola(s.alfa, rng);
+    if (ordine.length > 1 && ordine[0] === ultimo) {
+      // scambio con una posizione a caso: l'ordine resta uniforme tra quelli validi
+      const j = 1 + Math.floor(rng() * (ordine.length - 1));
+      [ordine[0], ordine[j]] = [ordine[j], ordine[0]];
+    }
+    return { ...s, ordine, pos: 0 };
+  }
+
+  /** Regola dei 3 secondi. Restituisce lo STESSO stato quando il brano va solo riavviato
+      (oltre i 3 secondi, oppure primo brano dell'elenco). */
+  function precedente(s, secondi) {
+    if (secondi > 3 || s.pos === 0) return s;
+    return { ...s, pos: s.pos - 1 };
+  }
+
+  /** Fine naturale del brano: con Ripeti attivo si riascolta lo stesso, altrimenti si va avanti. */
+  function fineBrano(s, rng) {
+    return s.ripeti ? s : successivo(s, rng);
+  }
+
+  /** Attiva/disattiva Casuale senza toccare il brano in corso: il nuovo ordine prosegue da lì. */
+  function impostaCasuale(s, attivo, rng) {
+    const corrente = branoCorrente(s);
+    if (attivo) {
+      const altri = mescola(s.alfa.filter(i => i !== corrente), rng);
+      return { ...s, casuale: true, ordine: [corrente, ...altri], pos: 0 };
+    }
+    return { ...s, casuale: false, ordine: s.alfa, pos: s.alfa.indexOf(corrente) };
+  }
+
+  /** Attiva/disattiva Ripeti (non cambia ordine né brano). */
+  function impostaRipeti(s, attivo) {
+    return { ...s, ripeti: attivo };
+  }
+
+  /** Brano scelto dall'elenco: si salta lì mantenendo l'ordine attuale. */
+  function vaiABrano(s, indice) {
+    return { ...s, pos: s.ordine.indexOf(indice) };
+  }
+
+  return {
+    eFileAudio, titoloDaNome, normalizza, formattaTempo, mescola, ordineAlfabetico, creaStato,
+    branoCorrente, successivo, precedente, fineBrano, impostaCasuale, impostaRipeti, vaiABrano,
+  };
+})();
+</script>
+
+<script>
+/* =========================================================
+   Interfaccia: collega la logica pura all'unico elemento <audio>,
+   ai pulsanti, alla tastiera e alla Media Session.
+   ========================================================= */
+const NOME_APP = 'App Musica';
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+
+let brani = [];            // { file, titolo, chiave } – chiave = titolo normalizzato per la ricerca
+let stato = null;          // stato della riproduzione (vedi Logica)
+let branoCaricato = null;  // brano assegnato in questo momento all'<audio>
+let urlCorrente = null;    // object URL del brano caricato: ne esiste al massimo uno alla volta
+const falliti = new Set(); // brani non riproducibili dall'ultimo brano partito correttamente
+let righe = null;          // pulsanti dell'elenco, per indice di brano (creati alla prima apertura)
+let rigaEvidenziata = null;
+let trascinando = false;   // l'utente sta spostando la barra di avanzamento
+let timerAvviso, timerRicerca;
+
+/* ---------- Avvisi brevi ---------- */
+function avviso(testo) {
+  clearTimeout(timerAvviso);
+  $('avviso').textContent = testo;
+  timerAvviso = setTimeout(() => { $('avviso').textContent = ''; }, 5000);
+}
+const quanti = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
+
+/* ---------- Scelta dei brani ---------- */
+if (!('webkitdirectory' in document.createElement('input'))) {
+  // Browser senza scelta delle cartelle: resta solo «Scegli file»
+  $('btn-cartella').hidden = $('btn-carica-cartella').hidden = true;
+  $('nota-cartella').hidden = false;
+}
+$('btn-cartella').onclick = $('btn-carica-cartella').onclick = () => $('input-cartella').click();
+$('btn-file').onclick = $('btn-carica-file').onclick = () => $('input-file').click();
+for (const input of [$('input-cartella'), $('input-file')]) {
+  input.addEventListener('change', () => {
+    const files = [...input.files];
+    input.value = ''; // permette di riscegliere la stessa cartella
+    caricaLibreria(files, input === $('input-cartella'));
+  });
+}
+
+function caricaLibreria(files, daCartella) {
+  const audioFiles = files.filter(f => Logica.eFileAudio(f.name, f.type));
+  const scartati = quanti(files.length - audioFiles.length, 'file scartato', 'file scartati');
+  if (!audioFiles.length) {
+    // L'eventuale libreria già caricata resta com'è
+    avviso(`Nessun file audio trovato (${scartati}).${daCartella ? ' Prova con «Scegli file».' : ''}`);
+    return;
+  }
+  brani = audioFiles.map(file => {
+    const titolo = Logica.titoloDaNome(file.name);
+    return { file, titolo, chiave: Logica.normalizza(titolo) };
+  });
+  stato = Logica.creaStato(brani.map(b => b.titolo), Math.random);
+  falliti.clear();
+  branoCaricato = null;
+  righe = rigaEvidenziata = null; // l'elenco verrà ricostruito alla prossima apertura
+  $('iniziale').hidden = true;
+  $('lettore').hidden = false;
+  avviso(`${quanti(brani.length, 'brano caricato', 'brani caricati')}, ${scartati}`);
+  suonaCorrente();
+}
+
+/* ---------- Riproduzione ---------- */
+function suonaCorrente() {
+  const brano = brani[Logica.branoCorrente(stato)];
+  if (brano === branoCaricato) {
+    audio.currentTime = 0; // stesso brano (Ripeti, regola dei 3 secondi, elenco di un brano): riparte
+  } else {
+    if (urlCorrente) URL.revokeObjectURL(urlCorrente);
+    urlCorrente = URL.createObjectURL(brano.file);
+    branoCaricato = brano;
+    audio.src = urlCorrente;
+    mostraTempo(0, 0);
+    aggiornaMetadati(brano);
+  }
+  aggiornaInfo();
+  riproduci();
+}
+
+function riproduci() {
+  if (!stato) return;
+  if (!branoCaricato) return suonaCorrente(); // dopo uno stop per errori: riprova dal brano corrente
+  // Se il browser blocca l'autoplay la promessa viene rifiutata e resta visibile il grande pulsante Play.
+  // Gli errori dei file arrivano invece dall'evento 'error'.
+  audio.play().catch(aggiornaStatoPlay);
+}
+
+const vai = nuovoStato => { stato = nuovoStato; suonaCorrente(); };
+const precedente = () => stato && vai(Logica.precedente(stato, audio.currentTime));
+const successivo = () => stato && vai(Logica.successivo(stato, Math.random));
+const playPausa = () => (audio.paused ? riproduci() : audio.pause());
+
+audio.addEventListener('ended', () => vai(Logica.fineBrano(stato, Math.random)));
+audio.addEventListener('playing', () => falliti.clear());
+audio.addEventListener('error', () => {
+  if (!branoCaricato) return;
+  falliti.add(branoCaricato);
+  if (falliti.size >= brani.length) {
+    // Nessun file riproducibile: ci si ferma invece di girare all'infinito
+    audio.removeAttribute('src');
+    audio.load();
+    URL.revokeObjectURL(urlCorrente);
+    urlCorrente = branoCaricato = null;
+    mostraTempo(0, 0);
+    aggiornaStatoPlay();
+    avviso('Nessun brano riproducibile: prova a scegliere altri file.');
+    return;
+  }
+  avviso(`Impossibile riprodurre «${branoCaricato.titolo}»: passo al successivo.`);
+  successivo();
+});
+
+/* ---------- Aggiornamento dell'interfaccia ---------- */
+function aggiornaInfo() {
+  $('titolo').textContent = brani[Logica.branoCorrente(stato)].titolo;
+  $('posizione').textContent = `${stato.pos + 1} / ${brani.length}`;
+  for (const [id, attivo] of [['btn-casuale', stato.casuale], ['btn-ripeti', stato.ripeti]]) {
+    $(id).setAttribute('aria-pressed', attivo);
+    $(id).querySelector('.stato').textContent = attivo ? 'Attivo' : 'Spento';
+  }
+  evidenziaRiga();
+}
+
+function aggiornaStatoPlay() {
+  const suona = !audio.paused;
+  $('btn-play').classList.toggle('suona', suona);
+  $('btn-play').setAttribute('aria-label', suona ? 'Pausa' : 'Riproduci');
+  if (mediaSession) mediaSession.playbackState = suona ? 'playing' : 'paused';
+  aggiornaPosizioneMedia();
+}
+audio.addEventListener('play', aggiornaStatoPlay);
+audio.addEventListener('pause', aggiornaStatoPlay);
+
+const durataAudio = () => (Number.isFinite(audio.duration) ? audio.duration : 0);
+
+function mostraTempo(posizione, durata) {
+  const barra = $('barra');
+  barra.max = durata;
+  barra.value = posizione;
+  barra.style.setProperty('--p', durata ? `${(posizione / durata) * 100}%` : '0%');
+  barra.setAttribute('aria-valuetext', `${Logica.formattaTempo(posizione)} di ${Logica.formattaTempo(durata)}`);
+  $('trascorso').textContent = Logica.formattaTempo(posizione);
+  $('durata').textContent = Logica.formattaTempo(durata);
+}
+
+function vaiAlSecondo(secondi) {
+  const durata = durataAudio();
+  if (durata) audio.currentTime = Math.min(Math.max(secondi, 0), durata);
+}
+
+audio.addEventListener('timeupdate', () => { if (!trascinando) mostraTempo(audio.currentTime, durataAudio()); });
+audio.addEventListener('durationchange', () => { mostraTempo(audio.currentTime, durataAudio()); aggiornaPosizioneMedia(); });
+audio.addEventListener('seeked', aggiornaPosizioneMedia);
+// Mentre si trascina si aggiorna solo l'indicazione; la posizione cambia al rilascio
+$('barra').addEventListener('input', () => { trascinando = true; mostraTempo(Number($('barra').value), durataAudio()); });
+$('barra').addEventListener('change', () => { trascinando = false; vaiAlSecondo(Number($('barra').value)); });
+
+/* ---------- Pulsanti del lettore ---------- */
+$('btn-play').onclick = playPausa;
+$('btn-prec').onclick = precedente;
+$('btn-succ').onclick = successivo;
+$('btn-casuale').onclick = () => { stato = Logica.impostaCasuale(stato, !stato.casuale, Math.random); aggiornaInfo(); };
+$('btn-ripeti').onclick = () => { stato = Logica.impostaRipeti(stato, !stato.ripeti); aggiornaInfo(); };
+
+/* ---------- Media Session: Bluetooth, auto, schermata di blocco, notifica Android ---------- */
+const mediaSession = 'mediaSession' in navigator ? navigator.mediaSession : null;
+
+function aggiornaMetadati(brano) {
+  if (!mediaSession) return;
+  mediaSession.metadata = new MediaMetadata({
+    title: brano.titolo,
+    artist: NOME_APP,
+    artwork: [192, 512].map(lato => ({ src: `icons/icon-maskable-${lato}.png`, sizes: `${lato}x${lato}`, type: 'image/png' })),
+  });
+}
+
+function aggiornaPosizioneMedia() {
+  const durata = durataAudio();
+  if (!mediaSession?.setPositionState || !durata) return;
+  mediaSession.setPositionState({ duration: durata, playbackRate: audio.playbackRate, position: Math.min(audio.currentTime, durata) });
+}
+
+if (mediaSession) {
+  const azioni = {
+    play: riproduci,
+    pause: () => audio.pause(),
+    stop: () => { audio.pause(); vaiAlSecondo(0); },
+    previoustrack: precedente, // stessa regola dei 3 secondi del pulsante
+    nexttrack: successivo,
+    seekto: d => vaiAlSecondo(d.seekTime),
+    seekbackward: d => vaiAlSecondo(audio.currentTime - (d.seekOffset || 10)),
+    seekforward: d => vaiAlSecondo(audio.currentTime + (d.seekOffset || 10)),
+  };
+  for (const [azione, gestore] of Object.entries(azioni)) {
+    try { mediaSession.setActionHandler(azione, gestore); } catch { /* azione non supportata da questo browser */ }
+  }
+}
+
+/* ---------- Tastiera (PC): spazio = play/pausa, frecce = precedente/successivo ---------- */
+document.addEventListener('keydown', e => {
+  if (!$('elenco').hidden) {
+    if (e.key === 'Escape') chiudiElenco();
+    return;
+  }
+  if (!stato || e.ctrlKey || e.altKey || e.metaKey) return;
+  const azione = { ' ': playPausa, ArrowLeft: precedente, ArrowRight: successivo }[e.key];
+  if (!azione || (e.target === $('barra') && e.key !== ' ')) return; // sulla barra le frecce spostano la posizione
+  e.preventDefault(); // evita anche che lo spazio "clicchi" il pulsante che ha il focus
+  if (!e.repeat) azione();
+});
+
+/* ---------- Elenco dei brani ---------- */
+function costruisciElenco() {
+  righe = [];
+  const frammento = document.createDocumentFragment();
+  for (const i of stato.alfa) {
+    const riga = document.createElement('button');
+    riga.type = 'button';
+    riga.className = 'riga';
+    riga.dataset.i = i;
+    const nome = document.createElement('span'); // titolo su una riga, con "…" se troppo lungo
+    nome.textContent = brani[i].titolo;
+    riga.append(nome);
+    frammento.append(righe[i] = riga);
+  }
+  $('lista').replaceChildren(frammento);
+}
+
+function evidenziaRiga() {
+  if (!righe) return;
+  rigaEvidenziata?.removeAttribute('aria-current');
+  rigaEvidenziata = righe[Logica.branoCorrente(stato)];
+  rigaEvidenziata.setAttribute('aria-current', 'true');
+}
+
+function filtra() {
+  if (!righe) return;
+  const cercato = Logica.normalizza($('ricerca').value.trim());
+  let trovati = 0;
+  brani.forEach((brano, i) => {
+    const visibile = brano.chiave.includes(cercato);
+    righe[i].hidden = !visibile;
+    trovati += visibile;
+  });
+  $('nessun-risultato').hidden = trovati > 0;
+  $('lista').scrollTop = 0; // i risultati si leggono dal primo
+}
+
+function apriElenco() {
+  if (!righe) costruisciElenco();
+  clearTimeout(timerRicerca);
+  $('ricerca').value = '';
+  filtra(); // si riparte sempre dall'elenco completo, così il brano corrente è visibile
+  evidenziaRiga();
+  $('elenco').hidden = false;
+  $('lettore').inert = true;
+  history.pushState({ elenco: true }, ''); // così il tasto Indietro di Android chiude l'elenco
+  rigaEvidenziata.scrollIntoView({ block: 'center' });
+  rigaEvidenziata.focus({ preventScroll: true });
+}
+
+function chiudiElenco() {
+  if (!$('elenco').hidden) history.back(); // la chiusura vera e propria avviene in 'popstate'
+}
+
+addEventListener('popstate', () => {
+  if ($('elenco').hidden) return;
+  $('elenco').hidden = true;
+  $('lettore').inert = false;
+  $('btn-elenco').focus();
+});
+if (history.state?.elenco) history.replaceState(null, ''); // pagina ricaricata con l'elenco aperto
+
+$('btn-elenco').onclick = apriElenco;
+$('btn-chiudi').onclick = chiudiElenco;
+$('lista').addEventListener('click', e => {
+  const riga = e.target.closest('.riga');
+  if (!riga) return;
+  vai(Logica.vaiABrano(stato, Number(riga.dataset.i)));
+  chiudiElenco();
+});
+$('ricerca').addEventListener('input', () => {
+  clearTimeout(timerRicerca);
+  timerRicerca = setTimeout(filtra, 150);
+});
+
+/* ---------- Funzionamento offline ---------- */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker non registrato:', err));
+}
+</script>
+</body>
+</html>
