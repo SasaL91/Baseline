@@ -1,6 +1,6 @@
 {
-  "name": "App Musica",
-  "short_name": "App Musica",
+  "name": "Baseline",
+  "short_name": "Baseline",
   "description": "Lettore musicale offline per i file audio salvati sul dispositivo.",
   "lang": "it",
   "start_url": "./",

@@ -5,7 +5,7 @@
    passano dal service worker, e in ogni caso audio/video e le
    richieste con intervallo (Range) vengono lasciati alla rete.
    ========================================================= */
-const PREFISSO = 'app-musica-';
+const PREFISSO = 'baseline-';
 const CACHE = `${PREFISSO}v1`; // ⚠ aumenta la versione a ogni modifica dei file dell'app
 const FILE_APP = [
   './',
@@ -46,6 +46,9 @@ self.addEventListener('fetch', event => {
     return; // nessuna intercettazione
   }
   event.respondWith(
-    caches.match(richiesta, { ignoreSearch: true }).then(risposta => risposta || fetch(richiesta))
+    // solo dalla NOSTRA cache: caches.match() cercherebbe anche in quelle di altre versioni o di altri siti
+    caches.open(CACHE)
+      .then(cache => cache.match(richiesta, { ignoreSearch: true }))
+      .then(risposta => risposta || fetch(richiesta))
   );
 });

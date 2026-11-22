@@ -1,4 +1,4 @@
-# App Musica
+# Baseline
 
 Lettore musicale offline (PWA) per uso personale: riproduce i file audio salvati sul dispositivo.
 Pensato per PC (Chrome/Edge) e Android (Chrome).
@@ -36,26 +36,23 @@ node test-logica.js
 
 ## Pubblicazione su GitHub Pages (gratis)
 
-1. Su GitHub crea un nuovo repository, per esempio `app-musica`.
-   Con un account gratuito deve essere **pubblico**: contiene solo il codice dell'app, mai la tua musica.
-2. Dalla cartella del progetto collega il repository e invia il codice
-   (sostituisci `UTENTE` con il tuo nome utente GitHub):
+Il codice è nel repository GitHub **SasaL91/Baseline**, ramo `main`.
+La cartella sul PC è già collegata: per inviare le modifiche basta `git push`.
 
-   ```powershell
-   git remote add origin https://github.com/UTENTE/app-musica.git
-   git push -u origin main
-   ```
-
-3. Su GitHub apri il repository → **Settings** → **Pages**.
-   In *Build and deployment* scegli **Source: Deploy from a branch**, poi **Branch: `main`** e cartella **`/ (root)`** → **Save**.
-4. Dopo un paio di minuti l'app è online su `https://UTENTE.github.io/app-musica/`.
+1. Con un account GitHub gratuito, Pages funziona solo con i repository **pubblici**:
+   **Settings → General →** in fondo alla pagina, *Danger Zone* **→ Change repository visibility → Public**.
+   Diventa pubblico il codice dell'app (con la cronologia dei commit), mai la tua musica.
+2. **Settings → Pages**: in *Build and deployment* scegli **Source: Deploy from a branch**,
+   poi **Branch: `main`** e cartella **`/ (root)`** → **Save**.
+3. Dopo un paio di minuti (l'avanzamento si vede nella scheda **Actions**) l'app è online su
+   <https://sasal91.github.io/Baseline/>. Scrivi il percorso esattamente così, con la **B** maiuscola.
 
 L'app usa solo percorsi relativi, quindi funziona anche in un sottopercorso come questo.
 
 ### Pubblicare un aggiornamento
 
 1. Modifica i file.
-2. In `sw.js` aumenta la versione della cache: `app-musica-v1` → `app-musica-v2` (e così via).
+2. In `sw.js` aumenta la versione della cache: `baseline-v1` → `baseline-v2` (e così via).
    Senza questo passo i dispositivi continuerebbero a usare la versione salvata.
 3. `git commit` e `git push`.
 
