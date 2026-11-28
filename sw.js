@@ -6,7 +6,7 @@
    richieste con intervallo (Range) vengono lasciati alla rete.
    ========================================================= */
 const PREFISSO = 'baseline-';
-const CACHE = `${PREFISSO}v1`; // ⚠ aumenta la versione a ogni modifica dei file dell'app
+const CACHE = `${PREFISSO}v2`; // ⚠ aumenta la versione a ogni modifica dei file dell'app
 const FILE_APP = [
   './',
   './index.html',
